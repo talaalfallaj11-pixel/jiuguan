@@ -1,0 +1,1200 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>正文提取</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;700&family=Noto+Sans+SC:wght@300;400;500;700&display=swap">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            /* 默认主题：暗色·薰衣草 */
+            --bg-grad-a: #31293c;
+            --bg-grad-b: #262333;
+            --bg-grad-c: #1f2937;
+            --card-bg: #242231;
+            --card-border: rgba(216, 180, 254, 0.4);
+            --text-primary: #eee7f5;
+            --text-secondary: #d0c8e0;
+            --accent: #a78bfa;
+            --accent-glow: rgba(168, 85, 247, 0.35);
+            --header-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            --card-shadow: 0 4px 20px rgba(168, 85, 247, 0.2);
+            --card-hover-shadow: 0 8px 30px rgba(168, 85, 247, 0.3);
+            --quote-bg: rgba(230, 236, 255, 0.15);
+            --quote-border: rgba(168, 85, 247, 0.4);
+            --quote-hover-bg: rgba(230, 236, 255, 0.25);
+            --loading-bg: rgba(36, 34, 49, 0.9);
+            --indicator-bg: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        body {
+            font-family: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, sans-serif;
+            line-height: 1.9;
+            color: var(--text-primary);
+            background: linear-gradient(135deg, var(--bg-grad-a) 0%, var(--bg-grad-b) 50%, var(--bg-grad-c) 100%);
+            padding: 0;
+            margin: 0;
+            width: 100%;
+            overflow-x: hidden;
+            min-height: 100vh;
+            transition: background 0.6s ease, color 0.4s ease;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background:
+                radial-gradient(circle at 20% 30%, var(--accent-glow) 0%, transparent 50%),
+                radial-gradient(circle at 80% 70%, var(--accent-glow) 0%, transparent 50%),
+                radial-gradient(circle at 50% 50%, rgba(102, 126, 234, 0.08) 0%, transparent 70%);
+            pointer-events: none;
+            z-index: 0;
+            opacity: 0.6;
+        }
+
+        .content-container {
+            max-width: 100%;
+            margin: 0;
+            padding: 0;
+            position: relative;
+            z-index: 1;
+            width: 100%;
+        }
+
+        /* 主题切换器 */
+        .theme-switcher {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1001;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            background: var(--card-bg);
+            padding: 10px;
+            border-radius: 20px;
+            box-shadow: var(--card-shadow);
+            border: 1px solid var(--card-border);
+            backdrop-filter: blur(10px);
+            opacity: 0;
+            transform: translateY(-10px) scale(0.95);
+            pointer-events: none;
+            transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+        }
+
+        .theme-switcher.show {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+            pointer-events: auto;
+        }
+
+        .theme-toggle-btn {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1002;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            border: 1px solid var(--card-border);
+            background: var(--card-bg);
+            color: var(--accent);
+            font-size: 18px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: var(--card-shadow);
+            backdrop-filter: blur(10px);
+            transition: all 0.3s ease;
+        }
+
+        .theme-toggle-btn:hover {
+            transform: scale(1.1);
+            box-shadow: var(--card-hover-shadow);
+        }
+
+        .theme-toggle-btn.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .theme-btn {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            border: 2px solid transparent;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .theme-btn:hover {
+            transform: scale(1.15);
+            box-shadow: 0 0 12px var(--accent-glow);
+        }
+
+        .theme-btn.active {
+            border-color: var(--text-primary);
+            box-shadow: 0 0 16px var(--accent-glow);
+        }
+
+        .theme-btn.lavender { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+        .theme-btn.pink { background: linear-gradient(135deg, #f472b6 0%, #db2777 100%); }
+        .theme-btn.mint { background: linear-gradient(135deg, #34d399 0%, #059669 100%); }
+        .theme-btn.crystal {
+            background: linear-gradient(135deg, rgba(200, 180, 240, 0.6) 0%, rgba(180, 160, 220, 0.4) 100%);
+            border: 1px dashed rgba(255, 255, 255, 0.5);
+        }
+
+        /* 亮色主题按钮样式 */
+        .theme-btn.light-lavender { background: linear-gradient(135deg, #a78bfa 0%, #7c3aed 100%); }
+        .theme-btn.light-pink { background: linear-gradient(135deg, #f9a8d4 0%, #ec4899 100%); }
+        .theme-btn.light-mint { background: linear-gradient(135deg, #6ee7b7 0%, #10b981 100%); }
+        .theme-btn.light-crystal {
+            background: linear-gradient(135deg, rgba(200, 180, 240, 0.7) 0%, rgba(180, 160, 220, 0.5) 100%);
+            border: 1px dashed rgba(255, 255, 255, 0.6);
+        }
+
+        .tag-setting-btn {
+            position: fixed;
+            top: 20px;
+            right: 68px;
+            z-index: 1002;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            border: 1px solid var(--card-border);
+            background: var(--card-bg);
+            color: var(--accent);
+            font-size: 18px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: var(--card-shadow);
+            transition: all 0.3s ease;
+        }
+
+        .tag-setting-btn:hover {
+            transform: scale(1.1);
+            box-shadow: var(--card-hover-shadow);
+        }
+
+        .tag-setting-panel {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 12px;
+            padding: 10px;
+            box-shadow: var(--card-shadow);
+            position: fixed;
+            top: 68px;
+            right: 20px;
+            z-index: 1001;
+        }
+
+        .tag-setting-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            margin-bottom: 8px;
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .tag-setting-row:last-child {
+            margin-bottom: 0;
+        }
+
+        .tag-setting-row input {
+            flex: 1;
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid var(--card-border);
+            border-radius: 6px;
+            padding: 4px 8px;
+            color: var(--text-primary);
+            font-size: 12px;
+            outline: none;
+        }
+
+        .tag-setting-row input:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 2px var(--accent-glow);
+        }
+
+        .content-card {
+            background: var(--card-bg);
+            border-radius: 20px;
+            padding: 32px 36px;
+            box-shadow: var(--card-shadow);
+            border: 1px solid var(--card-border);
+            margin-bottom: 28px;
+            backdrop-filter: blur(10px);
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .content-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: var(--header-gradient);
+            opacity: 0.8;
+        }
+
+        .content-card:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--card-hover-shadow);
+        }
+
+        .content-header-bar {
+            background: var(--header-gradient);
+            border-radius: 12px;
+            padding: 14px 20px;
+            color: white;
+            font-size: 14px;
+            font-weight: 500;
+            letter-spacing: 0.8px;
+            line-height: 1.6;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 12px;
+            box-shadow: 0 4px 12px var(--accent-glow);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .content-header-bar::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(135deg, transparent 0%, rgba(255, 255, 255, 0.15) 100%);
+            pointer-events: none;
+        }
+
+        .content-header-bar .header-icon {
+            font-size: 18px;
+            opacity: 0.95;
+            filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+        }
+
+        .content-header-bar .header-sep {
+            opacity: 0.8;
+            font-size: 12px;
+            margin: 0 4px;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+        }
+
+        .content-card-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 22px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid var(--card-border);
+            position: relative;
+        }
+
+        .content-card-header::after {
+            content: '';
+            position: absolute;
+            bottom: -1px;
+            left: 0;
+            width: 60px;
+            height: 2px;
+            background: var(--header-gradient);
+        }
+
+        .content-card-icon {
+            font-size: 20px;
+            opacity: 0.9;
+            filter: drop-shadow(0 2px 3px var(--accent-glow));
+        }
+
+        .content-card-title {
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--accent);
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+            text-shadow: 0 1px 2px var(--accent-glow);
+        }
+
+        .content-card-body {
+            font-size: 16px;
+            line-height: 1.8;
+        }
+
+        .content-card-body p {
+            margin-bottom: 1em;
+            text-indent: 2em;
+        }
+
+        .quote-highlight {
+            display: inline;
+            position: relative;
+            color: var(--text-primary);
+            font-weight: 600;
+            font-style: italic;
+            padding: 3px 8px;
+            background: var(--quote-bg);
+            border-radius: 6px;
+            border-bottom: 2px solid var(--quote-border);
+            box-shadow: 0 2px 4px var(--accent-glow);
+            transition: all 0.3s ease;
+        }
+
+        .quote-highlight:hover {
+            background: var(--quote-hover-bg);
+            border-bottom-color: var(--accent);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px var(--accent-glow);
+        }
+
+        .quote-highlight::before,
+        .quote-highlight::after {
+            font-weight: 700;
+            color: var(--accent);
+            font-size: 1.2em;
+            text-shadow: 0 1px 2px var(--accent-glow);
+        }
+
+        .quote-highlight::before {
+            content: '"';
+            margin-right: 2px;
+        }
+
+        .quote-highlight::after {
+            content: '"';
+            margin-left: 2px;
+        }
+
+        .loading-state {
+            text-align: center;
+            padding: 80px 20px;
+            color: var(--accent);
+            background: var(--loading-bg);
+            border-radius: 20px;
+            box-shadow: var(--card-shadow);
+            border: 1px solid var(--card-border);
+        }
+
+        .loading-state .spinner {
+            width: 48px;
+            height: 48px;
+            margin: 0 auto 20px;
+            border: 3px solid rgba(255, 255, 255, 0.1);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            box-shadow: 0 4px 12px var(--accent-glow);
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .loading-state p {
+            font-size: 14px;
+            letter-spacing: 3px;
+            font-weight: 500;
+            text-transform: uppercase;
+        }
+
+        .error-state {
+            text-align: center;
+            padding: 80px 20px;
+            color: #ef4444;
+            background: rgba(36, 34, 49, 0.9);
+            border-radius: 20px;
+            box-shadow: var(--card-shadow);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+
+        .error-state .icon {
+            font-size: 48px;
+            margin-bottom: 20px;
+            display: block;
+            filter: drop-shadow(0 4px 6px rgba(239, 68, 68, 0.4));
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 80px 20px;
+            color: var(--text-secondary);
+            background: var(--loading-bg);
+            border-radius: 20px;
+            box-shadow: var(--card-shadow);
+            border: 1px solid var(--card-border);
+        }
+
+        .empty-state .icon {
+            font-size: 48px;
+            margin-bottom: 20px;
+            display: block;
+            opacity: 0.6;
+            filter: grayscale(0.3);
+        }
+
+        .update-indicator {
+            position: fixed;
+            top: 20px;
+            right: 120px;
+            background: var(--indicator-bg);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 30px;
+            font-size: 13px;
+            font-weight: 600;
+            letter-spacing: 1.5px;
+            opacity: 0;
+            transform: translateY(-20px) scale(0.9);
+            transition: all 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+            z-index: 1000;
+            box-shadow: 0 10px 25px var(--accent-glow);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            backdrop-filter: blur(10px);
+        }
+
+        .update-indicator.show {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+        }
+
+        .update-indicator .pulse {
+            width: 8px;
+            height: 8px;
+            background: #2ecc71;
+            border-radius: 50%;
+            animation: pulse-dot 2s infinite;
+            box-shadow: 0 0 8px rgba(46, 204, 113, 0.6);
+        }
+
+        @keyframes pulse-dot {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.6; transform: scale(1.2); }
+        }
+
+        /* 响应式设计 */
+        @media (max-width: 768px) {
+            body {
+                padding: 16px;
+            }
+
+            .content-card {
+                padding: 24px 20px;
+                border-radius: 16px;
+            }
+
+            .content-header-bar {
+                padding: 12px 16px;
+                font-size: 13px;
+            }
+
+            .content-card-title {
+                font-size: 13px;
+            }
+
+            .content-card-body {
+                font-size: 15px;
+                line-height: 2;
+            }
+
+            .theme-switcher {
+                top: 12px;
+                right: 12px;
+                padding: 6px 10px;
+                gap: 6px;
+            }
+
+            .theme-btn {
+                width: 24px;
+                height: 24px;
+            }
+
+            .update-indicator {
+                top: 12px;
+                right: 70px;
+                padding: 10px 18px;
+                font-size: 12px;
+            }
+
+            .loading-state,
+            .error-state,
+            .empty-state {
+                padding: 60px 16px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- 主题切换按钮 -->
+    <button class="theme-toggle-btn" id="themeToggleBtn" title="切换主题">🎨</button>
+
+    <!-- 主题切换面板（默认隐藏） -->
+    <div class="theme-switcher" id="themeSwitcher">
+        <button class="theme-btn lavender active" data-theme="dark-lavender" title="暗色·薰衣草"></button>
+        <button class="theme-btn pink" data-theme="dark-pink" title="暗色·粉樱"></button>
+        <button class="theme-btn mint" data-theme="dark-mint" title="暗色·薄荷"></button>
+        <button class="theme-btn crystal" data-theme="dark-crystal" title="暗色·晶透"></button>
+        <button class="theme-btn light-lavender" data-theme="light-lavender" title="亮色·薰衣草"></button>
+        <button class="theme-btn light-pink" data-theme="light-pink" title="亮色·粉樱"></button>
+        <button class="theme-btn light-mint" data-theme="light-mint" title="亮色·薄荷"></button>
+        <button class="theme-btn light-crystal" data-theme="light-crystal" title="亮色·晶透"></button>
+    </div>
+
+    <!-- 标签设置按钮 -->
+    <button class="tag-setting-btn" id="tagSettingBtn" title="自定义标签">🏷️</button>
+
+    <!-- 标签设置面板 -->
+    <div class="tag-setting-panel" id="tagSettingPanel" style="display: none;">
+        <div class="tag-setting-row">
+            <span>正文标签</span>
+            <input type="text" id="tagContent" placeholder="content" />
+            <button class="tag-confirm-btn" id="tagConfirmBtn">确认</button>
+        </div>
+    </div>
+
+    <div class="content-container">
+        <div id="ph-loading" class="loading-state">
+            <div class="spinner"></div>
+            <p>正在加载内容...</p>
+        </div>
+        <div id="ph-empty" class="empty-state" style="display: none;">
+            <span class="icon">📖</span>
+            <p>暂无正文内容</p>
+        </div>
+        <div id="ph-content" style="display: none;"></div>
+    </div>
+
+    <div id="updateIndicator" class="update-indicator">
+        <span class="pulse"></span>
+        内容已更新
+    </div>
+
+    <script>
+        // ========== 主题系统 ==========
+        const THEMES = {
+            'dark-lavender': {
+                name: '暗色·薰衣草',
+                isDark: true,
+                css: {
+                    '--bg-grad-a':'#31293c','--bg-grad-b':'#262333','--bg-grad-c':'#1f2937',
+                    '--card-bg':'#242231','--card-border':'rgba(216,180,254,.4)',
+                    '--text-primary':'#eee7f5','--text-secondary':'#d0c8e0',
+                    '--accent':'#a78bfa','--accent-glow':'rgba(168,85,247,.35)',
+                    '--header-gradient':'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                    '--card-shadow':'0 4px 20px rgba(168,85,247,.2)',
+                    '--card-hover-shadow':'0 8px 30px rgba(168,85,247,.3)',
+                    '--quote-bg':'rgba(230, 236, 255, 0.15)',
+                    '--quote-border':'rgba(168, 85, 247, 0.4)',
+                    '--quote-hover-bg':'rgba(230, 236, 255, 0.25)',
+                    '--loading-bg':'rgba(36, 34, 49, 0.9)',
+                    '--indicator-bg':'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+                }
+            },
+            'dark-pink': {
+                name: '暗色·粉樱',
+                isDark: true,
+                css: {
+                    '--bg-grad-a':'#35202a','--bg-grad-b':'#2d1e26','--bg-grad-c':'#281b22',
+                    '--card-bg':'#2a1d24','--card-border':'rgba(255,180,200,.4)',
+                    '--text-primary':'#f5e8ed','--text-secondary':'#e0d0d8',
+                    '--accent':'#f472b6','--accent-glow':'rgba(244,114,182,.35)',
+                    '--header-gradient':'linear-gradient(135deg, #f472b6 0%, #db2777 100%)',
+                    '--card-shadow':'0 4px 20px rgba(244,114,182,.2)',
+                    '--card-hover-shadow':'0 8px 30px rgba(244,114,182,.3)',
+                    '--quote-bg':'rgba(255, 230, 240, 0.15)',
+                    '--quote-border':'rgba(244, 114, 182, 0.4)',
+                    '--quote-hover-bg':'rgba(255, 230, 240, 0.25)',
+                    '--loading-bg':'rgba(42, 29, 36, 0.9)',
+                    '--indicator-bg':'linear-gradient(135deg, #f472b6 0%, #db2777 100%)'
+                }
+            },
+            'dark-mint': {
+                name: '暗色·薄荷',
+                isDark: true,
+                css: {
+                    '--bg-grad-a':'#1e2e26','--bg-grad-b':'#1a2822','--bg-grad-c':'#16221d',
+                    '--card-bg':'#1c2822','--card-border':'rgba(100,220,160,.4)',
+                    '--text-primary':'#e2f0e8','--text-secondary':'#c8e0d0',
+                    '--accent':'#34d399','--accent-glow':'rgba(52,211,153,.35)',
+                    '--header-gradient':'linear-gradient(135deg, #34d399 0%, #059669 100%)',
+                    '--card-shadow':'0 4px 20px rgba(52,211,153,.2)',
+                    '--card-hover-shadow':'0 8px 30px rgba(52,211,153,.3)',
+                    '--quote-bg':'rgba(200, 240, 220, 0.15)',
+                    '--quote-border':'rgba(52, 211, 153, 0.4)',
+                    '--quote-hover-bg':'rgba(200, 240, 220, 0.25)',
+                    '--loading-bg':'rgba(28, 40, 34, 0.9)',
+                    '--indicator-bg':'linear-gradient(135deg, #34d399 0%, #059669 100%)'
+                }
+            },
+            'dark-crystal': {
+                name: '暗色·晶透',
+                isDark: true,
+                css: {
+                    '--bg-grad-a':'rgba(30,20,50,0.45)','--bg-grad-b':'rgba(25,18,40,0.42)','--bg-grad-c':'rgba(18,15,30,0.38)',
+                    '--card-bg':'rgba(25,20,40,0.35)','--card-border':'rgba(200,180,240,.4)',
+                    '--text-primary':'#ddd8f0','--text-secondary':'#c0b8d8',
+                    '--accent':'#c4b5fd','--accent-glow':'rgba(120,100,180,.25)',
+                    '--header-gradient':'linear-gradient(135deg, #a78bfa 0%, #7c3aed 100%)',
+                    '--card-shadow':'0 4px 20px rgba(120,100,180,.2)',
+                    '--card-hover-shadow':'0 8px 30px rgba(120,100,180,.3)',
+                    '--quote-bg':'rgba(220, 210, 255, 0.15)',
+                    '--quote-border':'rgba(167, 139, 250, 0.4)',
+                    '--quote-hover-bg':'rgba(220, 210, 255, 0.25)',
+                    '--loading-bg':'rgba(25, 20, 40, 0.6)',
+                    '--indicator-bg':'linear-gradient(135deg, #a78bfa 0%, #7c3aed 100%)'
+                }
+            },
+            'light-lavender': {
+                name: '亮色·薰衣草',
+                isDark: false,
+                css: {
+                    '--bg-grad-a':'#f5f0ff','--bg-grad-b':'#eadffb','--bg-grad-c':'#f3e8ff',
+                    '--card-bg':'rgba(255, 255, 255, 0.85)','--card-border':'rgba(168,85,247,.35)',
+                    '--text-primary':'#4a4252','--text-secondary':'#6b5f7a',
+                    '--accent':'#7c3aed','--accent-glow':'rgba(168,85,247,.25)',
+                    '--header-gradient':'linear-gradient(135deg, #7c3aed 0%, #a855f7 100%)',
+                    '--card-shadow':'0 4px 20px rgba(168,85,247,.15)',
+                    '--card-hover-shadow':'0 8px 30px rgba(168,85,247,.25)',
+                    '--quote-bg':'rgba(230, 236, 255, 0.6)',
+                    '--quote-border':'rgba(124, 58, 237, 0.35)',
+                    '--quote-hover-bg':'rgba(230, 236, 255, 0.8)',
+                    '--loading-bg':'rgba(255, 255, 255, 0.9)',
+                    '--indicator-bg':'linear-gradient(135deg, #7c3aed 0%, #a855f7 100%)'
+                }
+            },
+            'light-pink': {
+                name: '亮色·粉樱',
+                isDark: false,
+                css: {
+                    '--bg-grad-a':'#fff1f8','--bg-grad-b':'#fce7f3','--bg-grad-c':'#f5e8ff',
+                    '--card-bg':'rgba(255, 255, 255, 0.85)','--card-border':'rgba(244,114,182,.35)',
+                    '--text-primary':'#4a4050','--text-secondary':'#7a6080',
+                    '--accent':'#db2777','--accent-glow':'rgba(244,114,182,.25)',
+                    '--header-gradient':'linear-gradient(135deg, #f472b6 0%, #ec4899 100%)',
+                    '--card-shadow':'0 4px 20px rgba(244,114,182,.15)',
+                    '--card-hover-shadow':'0 8px 30px rgba(244,114,182,.25)',
+                    '--quote-bg':'rgba(255, 240, 245, 0.7)',
+                    '--quote-border':'rgba(219, 39, 119, 0.35)',
+                    '--quote-hover-bg':'rgba(255, 240, 245, 0.9)',
+                    '--loading-bg':'rgba(255, 255, 255, 0.9)',
+                    '--indicator-bg':'linear-gradient(135deg, #f472b6 0%, #ec4899 100%)'
+                }
+            },
+            'light-mint': {
+                name: '亮色·薄荷',
+                isDark: false,
+                css: {
+                    '--bg-grad-a':'#effdf7','--bg-grad-b':'#dcfce7','--bg-grad-c':'#eef8ff',
+                    '--card-bg':'rgba(255, 255, 255, 0.85)','--card-border':'rgba(34,197,94,.35)',
+                    '--text-primary':'#3a4a40','--text-secondary':'#5a7a60',
+                    '--accent':'#059669','--accent-glow':'rgba(34,197,94,.25)',
+                    '--header-gradient':'linear-gradient(135deg, #34d399 0%, #10b981 100%)',
+                    '--card-shadow':'0 4px 20px rgba(34,197,94,.15)',
+                    '--card-hover-shadow':'0 8px 30px rgba(34,197,94,.25)',
+                    '--quote-bg':'rgba(220, 250, 235, 0.6)',
+                    '--quote-border':'rgba(5, 150, 105, 0.35)',
+                    '--quote-hover-bg':'rgba(220, 250, 235, 0.8)',
+                    '--loading-bg':'rgba(255, 255, 255, 0.9)',
+                    '--indicator-bg':'linear-gradient(135deg, #34d399 0%, #10b981 100%)'
+                }
+            },
+            'light-crystal': {
+                name: '亮色·晶透',
+                isDark: false,
+                css: {
+                    '--bg-grad-a':'rgba(245,240,255,0.5)','--bg-grad-b':'rgba(235,228,250,0.48)','--bg-grad-c':'rgba(240,235,252,0.45)',
+                    '--card-bg':'rgba(255, 255, 255, 0.75)','--card-border':'rgba(180,160,220,.4)',
+                    '--text-primary':'#3a3450','--text-secondary':'#6a5f80',
+                    '--accent':'#7c3aed','--accent-glow':'rgba(140,120,190,.2)',
+                    '--header-gradient':'linear-gradient(135deg, #a78bfa 0%, #8b5cf6 100%)',
+                    '--card-shadow':'0 4px 20px rgba(140,120,190,.15)',
+                    '--card-hover-shadow':'0 8px 30px rgba(140,120,190,.25)',
+                    '--quote-bg':'rgba(240, 235, 255, 0.6)',
+                    '--quote-border':'rgba(139, 92, 246, 0.35)',
+                    '--quote-hover-bg':'rgba(240, 235, 255, 0.85)',
+                    '--loading-bg':'rgba(255, 255, 255, 0.8)',
+                    '--indicator-bg':'linear-gradient(135deg, #a78bfa 0%, #8b5cf6 100%)'
+                }
+            }
+        };
+
+        const DEFAULT_THEME = 'dark-lavender';
+        const STORAGE_KEY = 'novel-viewer-theme';
+
+        function loadTheme() {
+            try {
+                const saved = localStorage.getItem(STORAGE_KEY);
+                if (saved && THEMES[saved]) return saved;
+            } catch (e) {}
+            return DEFAULT_THEME;
+        }
+
+        function saveTheme(key) {
+            try { localStorage.setItem(STORAGE_KEY, key); } catch (e) {}
+        }
+
+        function applyTheme(themeKey) {
+            const theme = THEMES[themeKey];
+            if (!theme) return;
+
+            const root = document.documentElement;
+            Object.entries(theme.css).forEach(([prop, value]) => {
+                root.style.setProperty(prop, value);
+            });
+
+            // 更新按钮状态
+            document.querySelectorAll('.theme-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.theme === themeKey);
+            });
+
+            saveTheme(themeKey);
+        }
+
+        function initTheme() {
+            const theme = loadTheme();
+            applyTheme(theme);
+
+            const toggleBtn = document.getElementById('themeToggleBtn');
+            const switcher = document.getElementById('themeSwitcher');
+
+            // 切换面板展开/折叠
+            toggleBtn.addEventListener('click', () => {
+                switcher.classList.toggle('show');
+                toggleBtn.classList.toggle('hidden');
+            });
+
+            // 选择主题后自动折叠面板
+            document.querySelectorAll('.theme-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const themeKey = btn.dataset.theme;
+                    if (themeKey) applyTheme(themeKey);
+                    // 延迟折叠，让用户看到选中效果
+                    setTimeout(() => {
+                        switcher.classList.remove('show');
+                        toggleBtn.classList.remove('hidden');
+                    }, 200);
+                });
+            });
+
+            // 点击面板外区域折叠
+            document.addEventListener('click', (e) => {
+                if (!switcher.contains(e.target) && e.target !== toggleBtn && !toggleBtn.contains(e.target)) {
+                    switcher.classList.remove('show');
+                    toggleBtn.classList.remove('hidden');
+                }
+            });
+        }
+
+        // ========== 标签设置系统 ==========
+        const TAG_STORAGE_KEY = 'novel-viewer-tags';
+        const DEFAULT_TAGS = {
+            content: 'content',
+            header: 'novel_header',
+            disclaimer: 'disclaimer'
+        };
+
+        function loadTags() {
+            try {
+                const saved = localStorage.getItem(TAG_STORAGE_KEY);
+                if (saved) {
+                    const parsed = JSON.parse(saved);
+                    return { ...DEFAULT_TAGS, ...parsed };
+                }
+            } catch (e) {}
+            return { ...DEFAULT_TAGS };
+        }
+
+        function saveTags(tags) {
+            try { localStorage.setItem(TAG_STORAGE_KEY, JSON.stringify(tags)); } catch (e) {}
+        }
+
+        function getTagRegex(name) {
+            const tags = loadTags();
+            const tag = tags[name] || DEFAULT_TAGS[name];
+            return new RegExp(`<${tag}>([\\s\\S]*?)<\\/${tag}>`);
+        }
+
+        function getTagRegexGlobal(name) {
+            const tags = loadTags();
+            const tag = tags[name] || DEFAULT_TAGS[name];
+            return new RegExp(`<${tag}>[\\s\\S]*?<\\/${tag}>`, 'g');
+        }
+
+        function initTagSetting() {
+            const tags = loadTags();
+            const tagContent = document.getElementById('tagContent');
+            const tagBtn = document.getElementById('tagSettingBtn');
+            const tagPanel = document.getElementById('tagSettingPanel');
+            const confirmBtn = document.getElementById('tagConfirmBtn');
+
+            if (tagContent) tagContent.value = tags.content;
+
+            // 切换面板
+            tagBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const isHidden = tagPanel.style.display === 'none';
+                tagPanel.style.display = isHidden ? 'block' : 'none';
+                tagBtn.classList.toggle('hidden', isHidden);
+            });
+
+            // 点击外部关闭
+            document.addEventListener('click', (e) => {
+                if (!tagPanel.contains(e.target) && e.target !== tagBtn && !tagBtn.contains(e.target)) {
+                    tagPanel.style.display = 'none';
+                    tagBtn.classList.remove('hidden');
+                }
+            });
+
+            // 确认按钮保存
+            const saveHandler = () => {
+                const newTag = tagContent.value.trim() || DEFAULT_TAGS.content;
+                saveTags({ content: newTag });
+                window.location.reload();
+            };
+
+            if (confirmBtn) {
+                confirmBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    saveHandler();
+                });
+            }
+
+            if (tagContent) {
+                tagContent.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        saveHandler();
+                    }
+                });
+            }
+        }
+
+        // ========== 状态管理 ==========
+        let lastRawText = '';
+        let updateTimeout = null;
+
+        const PH = {
+            loading: document.getElementById('ph-loading'),
+            empty: document.getElementById('ph-empty'),
+            content: document.getElementById('ph-content'),
+            indicator: document.getElementById('updateIndicator')
+        };
+
+        /**
+         * 提取 <content> 标签内的内容
+         * @param {string} text - 原始消息文本
+         * @returns {{match: string|null, start: number|null, end: number|null}}
+         */
+        function extractContent(text) {
+            const regex = getTagRegex('content');
+            const match = text.match(regex);
+            return match ? {
+                content: match[1].trim(),
+                start: match.index,
+                end: match.index + match[0].length
+            } : { content: null, start: null, end: null };
+        }
+
+        /**
+         * 提取 <novel_header> 标签内的内容
+         * @param {string} text - 原始消息文本
+         * @returns {{match: string|null, start: number|null, end: number|null}}
+         */
+        function extractNovelHeader(text) {
+            const regex = getTagRegex('header');
+            const match = text.match(regex);
+            return match ? {
+                header: match[1].trim(),
+                start: match.index,
+                end: match.index + match[0].length
+            } : { header: null, start: null, end: null };
+        }
+
+        /**
+         * 移除内容中的 <disclaimer> 标签及其内容
+         * @param {string} content - 包含 disclaimer 的内容
+         * @returns {{clean: string, removed: Array<{start: number, end: number, text: string}>}}
+         */
+        function removeDisclaimers(content) {
+            const regex = getTagRegexGlobal('disclaimer');
+            const removed = [];
+            let match;
+
+            while ((match = regex.exec(content)) !== null) {
+                removed.push({
+                    start: match.index,
+                    end: match.index + match[0].length,
+                    text: match[0]
+                });
+            }
+
+            const clean = content.replace(regex, '').trim();
+            return { clean, removed };
+        }
+
+        /**
+         * 构建带占位符的文本表示
+         * @param {string} rawText - 原始消息文本
+         * @returns {Array} 占位符部分数组
+         */
+        function buildPlaceholderText(rawText) {
+            const parts = [];
+
+            // 提取 novel_header
+            const headerResult = extractNovelHeader(rawText);
+
+            // 提取 content
+            const contentResult = extractContent(rawText);
+            if (contentResult.content) {
+                const { clean, removed } = removeDisclaimers(contentResult.content);
+
+                // 添加正文内容（带 novel_header 合并）
+                if (clean) {
+                    parts.push({
+                        type: 'content_body',
+                        content: clean,
+                        header: headerResult.header,
+                        start: contentResult.start + 9,
+                        end: contentResult.end - 10,
+                        placeholder: clean.substring(0, 50) + (clean.length > 50 ? '...' : '')
+                    });
+                }
+            }
+
+            return parts;
+        }
+
+        /**
+         * 渲染占位符标记
+         * @param {Array} parts - 占位符部分数组
+         */
+        function renderPlaceholders(parts) {
+            if (parts.length === 0) {
+                PH.content.innerHTML = `
+                    <div class="empty-state">
+                        <span class="icon">📖</span>
+                        <p>暂无正文内容</p>
+                    </div>
+                `;
+                return;
+            }
+
+            let html = '';
+
+            parts.forEach((part, index) => {
+                if (part.type === 'content_body') {
+                    const headerHtml = part.header ? `
+                        <div class="content-header-bar">
+                            <span class="header-icon">📅</span>
+                            ${part.header.split('\n').map(line => line.trim()).filter(line => line).join('<span class="header-sep">|</span>')}
+                        </div>
+                    ` : '';
+                    html += `<div class="content-card">
+                        ${headerHtml}
+                        <div class="content-card-header">
+                            <span class="content-card-icon">📖</span>
+                            <span class="content-card-title">正文内容</span>
+                        </div>
+                        <div class="content-card-body">
+                            ${processParagraphs(part.content)}
+                        </div>
+                    </div>`;
+                }
+            });
+
+            PH.content.innerHTML = html;
+        }
+
+        /**
+         * 将文本按段落分割并处理双引号内容
+         * @param {string} text - 要分割的文本
+         * @returns {string} 处理后的HTML字符串
+         */
+        function processParagraphs(text) {
+            const paragraphs = text.split(/\n\s*\n/).filter(p => p.trim().length > 0);
+
+            return paragraphs.map(p => {
+                const processed = parseMarkdown(p);
+                return `<p>${processed}</p>`;
+            }).join('');
+        }
+
+        /**
+         * 简单 Markdown 转 HTML
+         * @param {string} text - 原始文本
+         * @returns {string} 转换后的HTML
+         */
+        function parseMarkdown(text) {
+            let html = text;
+
+            // 标题 # ## ###
+            html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
+            html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
+            html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>');
+
+            // 粗体 **text**
+            html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+
+            // 斜体 *text*
+            html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+
+            // 行内代码 `text`
+            html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+
+            // 链接 [text](url)
+            html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
+
+            // 图片 ![alt](url)
+            html = html.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1" style="max-width:100%;" />');
+
+            // 引用 > text
+            html = html.replace(/^> (.+)$/gm, '<blockquote>$1</blockquote>');
+
+            // 分割线 ---
+            html = html.replace(/^---$/gm, '<hr />');
+
+            // 处理双引号内容（保留原有逻辑）
+            html = html.replace(/"([^"]+)"/g, '<span class="quote-highlight">$1</span>');
+
+            return html;
+        }
+
+        /**
+         * 更新显示内容（使用占位符方式）
+         */
+        function updateDisplay() {
+            try {
+                // 无论结果如何，先隐藏加载状态
+                PH.loading.style.display = 'none';
+
+                if (typeof getCurrentMessageId !== 'function' || typeof getChatMessages !== 'function') {
+                    PH.empty.style.display = 'none';
+                    PH.content.style.display = 'block';
+                    PH.content.innerHTML = `
+                        <div class="error-state">
+                            <span class="icon">⚠️</span>
+                            <p>无法连接到酒馆助手，请确保在酒馆环境中运行</p>
+                        </div>
+                    `;
+                    return;
+                }
+
+                const messageId = getCurrentMessageId();
+                const messages = getChatMessages(messageId);
+
+                if (!messages || messages.length === 0) {
+                    PH.empty.style.display = 'block';
+                    PH.content.style.display = 'none';
+                    return;
+                }
+
+                const rawText = messages[0].message || '';
+
+                // 如果内容没有变化，跳过更新
+                if (rawText === lastRawText) {
+                    return;
+                }
+                lastRawText = rawText;
+
+                PH.empty.style.display = 'none';
+                PH.content.style.display = 'block';
+
+                // 构建并渲染占位符
+                const parts = buildPlaceholderText(rawText);
+                renderPlaceholders(parts);
+
+                // 显示更新指示器
+                showUpdateIndicator();
+
+                console.info('内容已更新，使用占位符标记正文位置');
+
+            } catch (error) {
+                console.error('更新显示时出错:', error);
+            }
+        }
+
+        /**
+         * 显示更新指示器
+         */
+        function showUpdateIndicator() {
+            PH.indicator.classList.add('show');
+            if (updateTimeout) {
+                clearTimeout(updateTimeout);
+            }
+            updateTimeout = setTimeout(() => {
+                PH.indicator.classList.remove('show');
+            }, 2000);
+        }
+
+        /**
+         * 初始化
+         */
+        $(() => {
+            console.info('开始初始化正文提取界面（占位符模式）...');
+
+            // 初始化主题系统
+            initTheme();
+
+            if (typeof getCurrentMessageId !== 'function' || typeof getChatMessages !== 'function') {
+                console.error('酒馆助手API不可用，请确保在酒馆环境中运行');
+                PH.loading.style.display = 'none';
+                PH.content.innerHTML = `
+                    <div class="error-state">
+                        <span class="icon">⚠️</span>
+                        <p>无法连接到酒馆助手，请刷新页面重试</p>
+                    </div>
+                `;
+                return;
+            }
+
+            console.info('酒馆助手API已就绪，启动占位符提取模式');
+
+            // 初始化标签设置
+            initTagSetting();
+
+            // 直接更新显示
+            updateDisplay();
+
+            // 监听消息变化，实时更新显示
+            if (typeof tavern_events !== 'undefined') {
+                eventOn(tavern_events.MESSAGE_RECEIVED, () => updateDisplay());
+                eventOn(tavern_events.MESSAGE_UPDATED, () => updateDisplay());
+                eventOn(tavern_events.USER_MESSAGE_RENDERED, () => updateDisplay());
+                eventOn(tavern_events.CHARACTER_MESSAGE_RENDERED, () => updateDisplay());
+                eventOn(tavern_events.CHAT_CHANGED, () => {
+                    lastRawText = '';
+                    updateDisplay();
+                });
+            }
+
+            console.info('正文提取界面初始化完成');
+        });
+    </script>
+</body>
+</html>
